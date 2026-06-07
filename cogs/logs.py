@@ -1,42 +1,49 @@
 import discord
 from discord.ext import commands
 from aiohttp import web
-import asyncio
 
-CHANNEL_ID = 1478822210985656415  # ID kanału Discord
-SECRET_TOKEN = "tajny_token_xyz"  # zabezpieczenie
+CHANNEL_ID = 1478822210985656415
+SECRET_TOKEN = "tajny_token_xyz"
 
-intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="!", intents=intents)
+class MinecraftBridge(commands.Cog):
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        self.runner = None
 
-# --- Endpoint HTTP ---
-async def handle_minecraft(request: web.Request):
-    auth = request.headers.get("Authorization", "")
-    if auth != f"Bearer {SECRET_TOKEN}":
-        return web.Response(status=401, text="Unauthorized")
+    async def cog_load(self):
+        """Uruchamia serwer HTTP gdy cog się ładuje."""
+        app = web.Application()
+        app.router.add_post("/minecraft", self.handle_minecraft)
+        self.runner = web.AppRunner(app)
+        await self.runner.setup()
+        site = web.TCPSite(self.runner, "0.0.0.0", 8080)
+        await site.start()
+        print("Serwer HTTP (Minecraft bridge) działa na porcie 8080")
 
-    data = await request.json()
-    message = data.get("message", "")
+    async def cog_unload(self):
+        """Zatrzymuje serwer HTTP gdy cog się wyładowuje."""
+        if self.runner:
+            await self.runner.cleanup()
 
-    channel = bot.get_channel(CHANNEL_ID)
-    if channel and message:
-        await channel.send(message)
-        return web.Response(text="OK")
+    async def handle_minecraft(self, request: web.Request):
+        auth = request.headers.get("Authorization", "")
+        if auth != f"Bearer {SECRET_TOKEN}":
+            return web.Response(status=401, text="Unauthorized")
 
-    return web.Response(status=400, text="Bad request")
+        try:
+            data = await request.json()
+        except Exception:
+            return web.Response(status=400, text="Invalid JSON")
 
-async def start_http_server():
-    app = web.Application()
-    app.router.add_post("/minecraft", handle_minecraft)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", 8080)  # port 8080
-    await site.start()
+        message = data.get("message", "")
+        channel = self.bot.get_channel(CHANNEL_ID)
 
-@bot.event
-async def on_ready():
-    print(f"Bot gotowy: {bot.user}")
-    await start_http_server()
-    print("Serwer HTTP działa na porcie 8080")
+        if channel and message:
+            await channel.send(message)
+            return web.Response(text="OK")
 
-bot.run("TWÓJ_TOKEN_DISCORD")
+        return web.Response(status=400, text="Bad request")
+
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(MinecraftBridge(bot))
