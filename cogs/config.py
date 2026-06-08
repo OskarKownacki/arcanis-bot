@@ -28,6 +28,7 @@ class Config(commands.Cog):
 
     @app_commands.command(name="config-ip", description="Ustawia adres IP serwera dla tego bota.")
     @app_commands.describe(ip_address="Adres IP serwera")
+    @app_commands.checks.has_permissions(administrator=True)
     async def config_ip(self, interaction: discord.Interaction, ip_address: str):
         if interaction.guild is None:
             await interaction.response.send_message("Tej komendy możesz użyć tylko na serwerze!", ephemeral=True)
@@ -61,6 +62,7 @@ class Config(commands.Cog):
 
     @app_commands.command(name="config-rcon-port", description="Ustawia port RCON serwera dla tego bota.")
     @app_commands.describe(port="Port RCON serwera")
+    @app_commands.checks.has_permissions(administrator=True)
     async def config_rcon_port(self, interaction: discord.Interaction, port: int):
         if interaction.guild is None:
             await interaction.response.send_message("Tej komendy możesz użyć tylko na serwerze!", ephemeral=True)
@@ -79,6 +81,7 @@ class Config(commands.Cog):
 
     @app_commands.command(name="config-rcon-password", description="Ustawia hasło RCON serwera dla tego bota.")
     @app_commands.describe(password="Hasło RCON serwera")
+    @app_commands.checks.has_permissions(administrator=True)
     async def config_rcon_password(self, interaction: discord.Interaction, password: str):
         if interaction.guild is None:
             await interaction.response.send_message("Tej komendy możesz użyć tylko na serwerze!", ephemeral=True)

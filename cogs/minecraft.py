@@ -21,7 +21,11 @@ def _normalize_rcon_line(raw_line: str) -> str:
     line = raw_line.strip()
     if line.startswith("[") and "]:" in line:
         return line.rsplit("]:", 1)[-1].strip()
-    return re.sub(r"§.", "", line)
+    return strip_minecraft_colors(line)
+
+
+def strip_minecraft_colors(text: str) -> str:
+    return re.sub(r'§.', '', text)
 
 
 def _extract_list_players(response_text: str) -> list[str]:
@@ -78,47 +82,7 @@ async def _fetch_player_online_since(client, player: str) -> str | None:
 class Minecraft(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-
-    @app_commands.command(name="ranking", description="Sprawdź ranking graczy na serwerze.")
-    async def ranking_command(self, interaction: discord.Interaction):
-        if interaction.guild is None:
-            await interaction.response.send_message("Tej komendy możesz użyć tylko na serwerze!", ephemeral=True)
-            return
-
-        guild_id = str(interaction.guild.id)
-        configs = Config.load_server_configs()
-        server_setting = configs.get(guild_id)
-
-        if not server_setting or "rcon_password" not in server_setting:
-            await interaction.response.send_message(
-                "❌ Ten serwer Discord nie ma jeszcze skonfigurowanego hasła RCON!\nUżyj najpierw komendy `/config-rcon-password`.", 
-                ephemeral=True
-            )
-            return
-
-        await interaction.response.defer(ephemeral=True)
-
-        host = server_setting.get("ip", "127.0.0.1")
-        port = int(server_setting.get("rcon_port", 25575))
-        password = server_setting["rcon_password"]
-        client = None
-
-        try:
-            client = await _create_rcon_client(host, port, password)
-            
-            response = await client.execute("ranking")
-
-            if not response or response.isspace():
-                response = "Komenda wykonana pomyślnie (brak odpowiedzi z konsoli)."
-
-            await interaction.followup.send(f"💻 **[{host}:{port}] Wynik `/ranking`:**\n```text\n{response}\n```")
-
-        except Exception as e:
-            await interaction.followup.send(f"❌ Błąd połączenia z RCON (`{host}:{port}`): `{e}`")
-        finally:
-            if client is not None:
-                client.close()
-
+        
     @app_commands.command(name="list", description="Sprawdź listę graczy na serwerze.")
     async def list_command(self, interaction: discord.Interaction):
         if interaction.guild is None:
@@ -173,6 +137,46 @@ class Minecraft(commands.Cog):
             else:
                 await interaction.followup.send("ℹ️ Na serwerze nie ma obecnie nikogo online.")
 
+        except Exception as e:
+            await interaction.followup.send(f"❌ Błąd połączenia z RCON (`{host}:{port}`): `{e}`")
+        finally:
+            if client is not None:
+                client.close()
+    @app_commands.command(name="ranking", description="Sprawdź ranking graczy na serwerze.")
+    async def ranking_command(self, interaction: discord.Interaction):
+        if interaction.guild is None:
+            await interaction.response.send_message("Tej komendy możesz użyć tylko na serwerze!", ephemeral=True)
+            return
+
+        guild_id = str(interaction.guild.id)
+        configs = Config.load_server_configs()
+        server_setting = configs.get(guild_id)
+
+        if not server_setting or "rcon_password" not in server_setting:
+            await interaction.response.send_message(
+                "❌ Ten serwer Discord nie ma jeszcze skonfigurowanego hasła RCON!\nUżyj najpierw komendy `/config-rcon-password`.", 
+                ephemeral=True
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        host = server_setting.get("ip", "127.0.0.1")
+        port = int(server_setting.get("rcon_port", 25575))
+        password = server_setting["rcon_password"]
+        client = None
+
+        try:
+            client = await _create_rcon_client(host, port, password)
+
+            response_list = await client.execute("rankingconsole")
+
+            embed = discord.Embed(
+                    title="Ranking graczy",
+                    description=f"```text\n{strip_minecraft_colors(response_list)}```",
+                    color=discord.Color.green(),
+            )
+            await interaction.followup.send(embed=embed)
         except Exception as e:
             await interaction.followup.send(f"❌ Błąd połączenia z RCON (`{host}:{port}`): `{e}`")
         finally:
