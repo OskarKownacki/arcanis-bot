@@ -1,3 +1,4 @@
+import logging
 import os
 import asyncio
 import discord
@@ -39,3 +40,9 @@ if TOKEN:
     bot.run(TOKEN)
 else:
     print("BŁĄD: Brak tokenu w pliku .env!")
+
+logging.basicConfig(level=logging.INFO)
+
+@bot.event
+async def on_command(ctx):
+    logging.info(f"[COMMAND] {ctx.author} | {ctx.message.content} | #{ctx.channel} | {ctx.guild}")
