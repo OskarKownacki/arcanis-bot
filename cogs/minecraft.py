@@ -54,6 +54,23 @@ def _extract_list_players(response_text: str) -> list[str]:
 
     return players
 
+def _extract_total_online_with_vanish(response_text: str) -> tuple[int, int] | None:
+    """
+    Essentials zwraca linię typu:
+    'There are 3/1 out of maximum 20 players online.'
+    gdzie 3 = widoczni gracze, 1 = gracze na vanishu.
+    Zwraca (widoczni, vanish) albo None jeśli nie znaleziono.
+    """
+    for raw_line in response_text.splitlines():
+        line = _normalize_rcon_line(raw_line)
+        match = re.search(
+            r"There are\s+(?P<visible>\d+)\s*/\s*(?P<vanish>\d+)\s+out of maximum\s+\d+\s+players online",
+            line,
+            re.IGNORECASE,
+        )
+        if match:
+            return int(match.group("visible")), int(match.group("vanish"))
+    return None
 
 def _extract_seen_online_since(response_text: str) -> str | None:
     for raw_line in response_text.splitlines():
@@ -80,10 +97,11 @@ async def _fetch_player_online_since(client, player: str) -> str | None:
     response = await client.execute(f"seen {player}")
     return _extract_seen_online_since(response)
 
+cSTATUS_GUILD_ID = "1478822210985656412"
+
 class Minecraft(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self._status_index = 0
 
     async def cog_load(self):
         self.update_status.start()
@@ -94,19 +112,11 @@ class Minecraft(commands.Cog):
     @tasks.loop(minutes=5)
     async def update_status(self):
         configs = Config.load_server_configs()
-        servers = [
-            (guild_id, cfg) for guild_id, cfg in configs.items()
-            if cfg.get("ip") and cfg.get("rcon_password")
-        ]
+        server_setting = configs.get(STATUS_GUILD_ID)
 
-        if not servers:
+        if not server_setting or "rcon_password" not in server_setting:
+            print("⚠️ Brak konfiguracji RCON dla serwera statusu.")
             return
-
-        if self._status_index >= len(servers):
-            self._status_index = 0
-
-        guild_id, server_setting = servers[self._status_index]
-        self._status_index += 1
 
         host = server_setting.get("ip", "127.0.0.1")
         port = int(server_setting.get("rcon_port", 25575))
@@ -116,20 +126,24 @@ class Minecraft(commands.Cog):
         try:
             client = await _create_rcon_client(host, port, password)
             response_list = await client.execute("list")
-            players = _extract_list_players(response_list)
-            count = len(players)
 
-            guild = self.bot.get_guild(int(guild_id))
-            guild_name = guild.name if guild else host
+            counts = _extract_total_online_with_vanish(response_list)
+
+            if counts is not None:
+                visible, vanished = counts
+                total = visible + vanished
+            else:
+                # Fallback na starą metodę, gdyby format się nie zgodził
+                total = len(_extract_list_players(response_list))
 
             activity = discord.Activity(
                 type=discord.ActivityType.watching,
-                name=f"{count} graczy online | {guild_name}"
+                name=f"{total} graczy online"
             )
             await self.bot.change_presence(activity=activity)
 
         except Exception as e:
-            print(f"⚠️ Nie udało się zaktualizować statusu dla {host}:{port}: {e}")
+            print(f"⚠️ Nie udało się zaktualizować statusu ({host}:{port}): {e}")
         finally:
             if client is not None:
                 client.close()
