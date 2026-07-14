@@ -33,6 +33,8 @@ async def on_ready():
     try:
         synced = await bot.tree.sync()
         print(f"Zsynchronizowano {len(synced)} komend slash globalnie.")
+        game = discord.Game("Zapraszamy na nasz serwer! IP: arcanis.maxc.pl" )
+        await bot.change_presence(activity=game)
     except Exception as e:
         print(f"Błąd synchronizacji komend: {e}")
 
