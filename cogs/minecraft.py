@@ -138,7 +138,7 @@ class Minecraft(commands.Cog):
 
             activity = discord.Activity(
                 type=discord.ActivityType.watching,
-                name=f"{total} graczy online"
+                name=f"{total} graczy online na Arcanis!"
             )
             await self.bot.change_presence(activity=activity)
 
