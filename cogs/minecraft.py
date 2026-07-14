@@ -97,7 +97,7 @@ async def _fetch_player_online_since(client, player: str) -> str | None:
     response = await client.execute(f"seen {player}")
     return _extract_seen_online_since(response)
 
-cSTATUS_GUILD_ID = "1478822210985656412"
+STATUS_GUILD_ID = "1478822210985656412"
 
 class Minecraft(commands.Cog):
     def __init__(self, bot: commands.Bot):
