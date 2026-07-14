@@ -6,6 +6,7 @@ from discord import app_commands
 import aiorcon
 from aiorcon.messages import RCONMessage
 from cogs.config import Config
+from discord.ext import tasks
 
 
 def _split_player_names(raw_players: str) -> list[str]:
@@ -82,6 +83,60 @@ async def _fetch_player_online_since(client, player: str) -> str | None:
 class Minecraft(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self._status_index = 0
+
+    async def cog_load(self):
+        self.update_status.start()
+
+    async def cog_unload(self):
+        self.update_status.cancel()
+
+    @tasks.loop(minutes=5)
+    async def update_status(self):
+        configs = Config.load_server_configs()
+        servers = [
+            (guild_id, cfg) for guild_id, cfg in configs.items()
+            if cfg.get("ip") and cfg.get("rcon_password")
+        ]
+
+        if not servers:
+            return
+
+        if self._status_index >= len(servers):
+            self._status_index = 0
+
+        guild_id, server_setting = servers[self._status_index]
+        self._status_index += 1
+
+        host = server_setting.get("ip", "127.0.0.1")
+        port = int(server_setting.get("rcon_port", 25575))
+        password = server_setting["rcon_password"]
+        client = None
+
+        try:
+            client = await _create_rcon_client(host, port, password)
+            response_list = await client.execute("list")
+            players = _extract_list_players(response_list)
+            count = len(players)
+
+            guild = self.bot.get_guild(int(guild_id))
+            guild_name = guild.name if guild else host
+
+            activity = discord.Activity(
+                type=discord.ActivityType.watching,
+                name=f"{count} graczy online | {guild_name}"
+            )
+            await self.bot.change_presence(activity=activity)
+
+        except Exception as e:
+            print(f"⚠️ Nie udało się zaktualizować statusu dla {host}:{port}: {e}")
+        finally:
+            if client is not None:
+                client.close()
+
+    @update_status.before_loop
+    async def before_update_status(self):
+        await self.bot.wait_until_ready()
         
     @app_commands.command(name="list", description="Sprawdź listę graczy na serwerze.")
     async def list_command(self, interaction: discord.Interaction):
