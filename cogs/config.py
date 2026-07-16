@@ -99,5 +99,23 @@ class Config(commands.Cog):
         # Używamy ephemeral=True, żeby wpisane hasło nie wisiało publicznie na kanale tekstowym
         await interaction.response.send_message(f"✅ Pomyślnie ustawiono hasło RCON dla tego serwera.", ephemeral=True)
 
+    @app_commands.command(name="config-session-channel", description="Ustawia kanał, na którym będą ogłaszane sesje.")
+    @app_commands.describe(channel="Kanał do ogłoszeń sesji")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def config_session_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        if interaction.guild is None:
+            await interaction.response.send_message("Tej komendy możesz użyć tylko na serwerze!", ephemeral=True)
+            return
+
+        guild_id = str(interaction.guild.id)
+        configs = Config.load_server_configs()
+
+        if guild_id not in configs:
+            configs[guild_id] = {}
+
+        configs[guild_id]["session_channel_id"] = channel.id
+        Config.save_server_configs(configs)
+
+        await interaction.response.send_message(f"✅ Kanał ogłoszeń sesji ustawiono na {channel.mention}")
 async def setup(bot: commands.Bot):
     await bot.add_cog(Config(bot))

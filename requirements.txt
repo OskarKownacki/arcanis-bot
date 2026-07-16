@@ -11,3 +11,6 @@ propcache==0.5.2
 python-dotenv==1.2.2
 typing_extensions==4.15.0
 yarl==1.24.2
+google-auth==2.40.3
+google-auth-oauthlib==1.2.2
+google-api-python-client==2.164.0
